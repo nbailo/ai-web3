@@ -6,8 +6,10 @@ from web3 import Web3
 import time
 from decimal import Decimal
 from datatypes import QuoteRequest, AllowedPair, PricingSnapshot, ChainSnapshot
-from dump import MakerConfig, process_quote_request, fetch_maker_config_from_db, fetch_chain_snapshot
+from confighelper import fetch_maker_config_from_db, fetch_chain_snapshot
+from enforcer import process_quote_request
 from fetch_data import fetch_pricing_snapshot
+from makeragent.SmartChatBot import MakerConfig
 
 app = Flask(__name__)
 
@@ -48,13 +50,13 @@ def get_quote():
                 quote_req.chainId,
                 quote_req.tokenIn,
                 quote_req.tokenOut,
-                quote_req.side,
-                quote_req.amount
+                quote_req.side
             )
             if not pricing:
                 return jsonify({'error': 'Could not fetch pricing snapshot'}), 500
         
         # 1.4 ingest the ChainSnapshot
+        # status: Chain API TBD 
         if 'chainSnapshot' in data:
             chain = ChainSnapshot.from_dict(data['chainSnapshot'])
         else:
@@ -73,23 +75,21 @@ def get_quote():
                 return jsonify({'error': 'Could not fetch chain snapshot'}), 500
         
         # 2. processing the quote once all data is in
-        intent, rejection_reason, explainability = process_quote_request(
+        intent, rejections  = process_quote_request(
             quote_req, maker_cfg, pricing, chain
         )
         
-        if intent and not rejection_reason:
+        if rejections != []:
             response = {
                 'quoteIntent': intent.to_dict(),
-                'explainability': explainability.to_dict() if explainability else None,
                 'rejected': False
             }
             return jsonify(response), 200
         else:
             response = {
                 'quoteIntent': None,
-                'explainability': None,
                 'rejected': True,
-                'rejectionReason': rejection_reason or 'UNKNOWN_ERROR'
+                'rejectionReason': rejections
             }
             return jsonify(response), 200
     
