@@ -1,0 +1,23 @@
+{
+  "8453": {
+    "name": "base",
+    "rpcUrl": "https://rpc.ankr.com/base/2b1525b3c0c0b7f5780bfb4493e7ba6e610bb89ce35764ccb14123dbfc73e3a8",
+    "aqua": "0x499943E74FB0cE105688beeE8Ef2ABec5D936d31",
+    "executor": "0x4272019190fa61a248a35ebc089a20a0cf48a523",
+    "maker": "0x0000000000000000000000000000000000000000",
+    "signingKey": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "pricingUrl": "http://127.0.0.1:8081",
+    "strategyUrl": "http://127.0.0.1:8082"
+  },
+  "56": {
+    "name": "bsc",
+    "rpcUrl": "https://rpc.ankr.com/bsc/2b1525b3c0c0b7f5780bfb4493e7ba6e610bb89ce35764ccb14123dbfc73e3a8",
+    "aqua": "0x499943E74FB0cE105688beeE8Ef2ABec5D936d31",
+    "executor": "0x0000000000000000000000000000000000000000",
+    "maker": "0x0000000000000000000000000000000000000000",
+    "signingKey": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "pricingUrl": "http://127.0.0.1:8081",
+    "strategyUrl": "http://127.0.0.1:8082"
+  }
+}
+
