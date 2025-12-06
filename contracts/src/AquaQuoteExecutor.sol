@@ -78,7 +78,7 @@ contract AquaQuoteExecutor is EIP712, ReentrancyGuard, Ownable {
     event FeeUpdated(address indexed feeCollector, uint256 feeBps);
 
     constructor(IAqua aqua, address _feeCollector, uint256 _feeBps)
-        EIP712("AquaRFQExecutor", "1")
+        EIP712("AquaQuoteExecutor", "1")
         Ownable(msg.sender)
     {
         require(address(aqua) != address(0), "AQUA=0");
