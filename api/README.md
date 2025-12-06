@@ -18,6 +18,7 @@ npm run start:dev
 | --- | --- |
 | `DATABASE_URL` | Postgres connection string (set `connection_limit=5` for Cloud SQL) |
 | `CHAINS_CONFIG_PATH` | Path to the chains config JSON file (defaults to `chains.config.json`) |
+| `SIGNING_KEY_<chainId>` | Per-chain maker signing key (referenced via `signingKeyEnv` in chains config) |
 | `REQUEST_TIMEOUT_MS` | HTTP timeout for downstream services |
 | `GLOBAL_TIMEOUT_MS` | API timeout guard |
 | `QUOTE_EXPIRY_SECONDS` | Default expiry horizon for firm quotes |

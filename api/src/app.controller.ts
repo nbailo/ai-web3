@@ -1,7 +1,9 @@
 import { Controller, Get, ParseIntPipe, Query } from '@nestjs/common';
+import { ApiOkResponse, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ChainsRegistry } from './config/chains.registry';
 import { StrategiesService } from './strategies/strategies.service';
 
+@ApiTags('public')
 @Controller()
 export class AppController {
   constructor(
@@ -10,6 +12,8 @@ export class AppController {
   ) {}
 
   @Get('health')
+  @ApiOperation({ summary: 'Liveness check' })
+  @ApiOkResponse({ description: 'Service status' })
   health() {
     return {
       status: 'ok',
@@ -18,11 +22,16 @@ export class AppController {
   }
 
   @Get('chains')
+  @ApiOperation({ summary: 'List configured chains (public data only)' })
+  @ApiOkResponse({ description: 'Array of chains' })
   getChains() {
     return this.chainsRegistry.list().map(({ signingKey, ...rest }) => rest);
   }
 
   @Get('metadata')
+  @ApiOperation({ summary: 'Chain metadata (maker, executor, active strategy)' })
+  @ApiQuery({ name: 'chainId', type: Number })
+  @ApiOkResponse({ description: 'Chain metadata' })
   async getMetadata(@Query('chainId', ParseIntPipe) chainId: number) {
     const chain = this.chainsRegistry.get(chainId);
     const meta = await this.strategiesService.getChainMetadata(chainId);

@@ -27,7 +27,8 @@ import { ChainsRegistry } from './chains.registry';
           throw new Error(`Chains config file not found at ${resolvedPath}`);
         }
         const json = readFileSync(resolvedPath, 'utf8');
-        registry.loadFromJson(json);
+        const lookup = (key: string) => configService.get<string>(key);
+        registry.loadFromJson(json, lookup);
         return registry;
       },
     },

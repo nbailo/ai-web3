@@ -1,5 +1,5 @@
 import { Body, Controller, Put } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { UpdateChainConfigDto } from './admin.dto';
 import { AdminService } from './admin.service';
 
@@ -9,6 +9,9 @@ export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
   @Put()
+  @ApiOperation({ summary: 'Update chain level config (pause / active strategy)' })
+  @ApiBody({ type: UpdateChainConfigDto })
+  @ApiOkResponse({ description: 'Updated chain metadata' })
   update(@Body() dto: UpdateChainConfigDto) {
     return this.adminService.updateChainConfig(dto);
   }

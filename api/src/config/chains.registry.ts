@@ -13,13 +13,13 @@ export interface ChainConfig {
   strategyUrl: string;
 }
 
-const REQUIRED_FIELDS: Array<keyof ChainConfig> = [
+const REQUIRED_FIELDS: Array<string> = [
   'name',
   'rpcUrl',
   'aqua',
   'executor',
   'maker',
-  'signingKey',
+  'signingKeyEnv',
   'pricingUrl',
   'strategyUrl',
 ];
@@ -29,7 +29,10 @@ export class ChainsRegistry {
   private readonly logger = new Logger(ChainsRegistry.name);
   private readonly registry = new Map<number, ChainConfig>();
 
-  loadFromJson(json: string): void {
+  loadFromJson(
+    json: string,
+    envLookup: (variable: string) => string | undefined,
+  ): void {
     let parsed: Record<string, any>;
     try {
       parsed = JSON.parse(json);
@@ -42,7 +45,7 @@ export class ChainsRegistry {
       if (!Number.isInteger(chainId)) {
         throw new Error(`Invalid chain id ${chainIdStr} in chains config`);
       }
-      const normalized = this.validateConfig(chainId, config as Record<string, any>);
+      const normalized = this.validateConfig(chainId, config as Record<string, any>, envLookup);
       this.registry.set(chainId, normalized);
     });
 
@@ -64,7 +67,11 @@ export class ChainsRegistry {
     return config;
   }
 
-  private validateConfig(chainId: number, config: Record<string, any>): ChainConfig {
+  private validateConfig(
+    chainId: number,
+    config: Record<string, any>,
+    envLookup: (variable: string) => string | undefined,
+  ): ChainConfig {
     for (const field of REQUIRED_FIELDS) {
       if (!config[field]) {
         throw new Error(`Missing field ${field} for chain ${chainId}`);
@@ -81,9 +88,16 @@ export class ChainsRegistry {
         return acc;
       }, {});
 
-    const signingKey: string = config.signingKey;
+    const signingKeyEnv: string = config.signingKeyEnv;
+    if (typeof signingKeyEnv !== 'string') {
+      throw new Error(`Invalid signingKeyEnv for chain ${chainId}`);
+    }
+    const signingKey = envLookup(signingKeyEnv);
+    if (!signingKey) {
+      throw new Error(`Env var ${signingKeyEnv} (signing key for chain ${chainId}) is not set`);
+    }
     if (typeof signingKey !== 'string' || !signingKey.startsWith('0x') || signingKey.length !== 66) {
-      throw new Error(`Invalid signingKey for chain ${chainId}`);
+      throw new Error(`Invalid signing key loaded from ${signingKeyEnv} for chain ${chainId}`);
     }
 
     return {
