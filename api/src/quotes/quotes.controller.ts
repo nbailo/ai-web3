@@ -18,7 +18,7 @@ export class QuotesController {
         value: {
           chainId: 8453,
           sellToken: '0x4200000000000000000000000000000000000006',
-          buyToken: '0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA',
+          buyToken: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
           sellAmount: '100000000000000000',
         },
       },
@@ -39,7 +39,7 @@ export class QuotesController {
         value: {
           chainId: 8453,
           sellToken: '0x4200000000000000000000000000000000000006',
-          buyToken: '0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA',
+          buyToken: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
           sellAmount: '100000000000000000',
           taker: '0x1111111111111111111111111111111111111111',
           recipient: '0x1111111111111111111111111111111111111111',

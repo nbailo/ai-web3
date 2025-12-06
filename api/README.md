@@ -18,7 +18,9 @@ npm run start:dev
 | --- | --- |
 | `DATABASE_URL` | Postgres connection string (set `connection_limit=5` for Cloud SQL) |
 | `CHAINS_CONFIG_PATH` | Path to the chains config JSON file (defaults to `chains.config.json`) |
-| `SIGNING_KEY_<chainId>` | Per-chain maker signing key (referenced via `signingKeyEnv` in chains config) |
+| `SIGNING_KEY_<chainId>` | Per-chain maker signing key (referenced via `signingKeyEnv`) |
+| `PRICING_URL` | Base URL for the pricing service |
+| `STRATEGY_URL` | Base URL for the strategy service |
 | `REQUEST_TIMEOUT_MS` | HTTP timeout for downstream services |
 | `GLOBAL_TIMEOUT_MS` | API timeout guard |
 | `QUOTE_EXPIRY_SECONDS` | Default expiry horizon for firm quotes |
@@ -34,6 +36,8 @@ npm run migration:run
 ```
 
 See `src/migrations/1711770000000-InitSchema.ts` for the initial schema (tokens, pairs, strategies, quotes, nonce_state, app_config).
+
+`chains.config.json` describes per-chain static data (rpc, aqua/executor, etc). Each entry references an env variable via `signingKeyEnv`; the maker address is derived automatically from that key, and shared service URLs (`PRICING_URL`, `STRATEGY_URL`) are sourced from env.
 
 ## Project layout
 

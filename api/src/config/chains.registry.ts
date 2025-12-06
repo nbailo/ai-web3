@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
-import { getAddress, isAddress } from 'ethers';
+import { Wallet, getAddress, isAddress } from 'ethers';
 
 export interface ChainConfig {
   chainId: number;
@@ -18,10 +18,7 @@ const REQUIRED_FIELDS: Array<string> = [
   'rpcUrl',
   'aqua',
   'executor',
-  'maker',
   'signingKeyEnv',
-  'pricingUrl',
-  'strategyUrl',
 ];
 
 @Injectable()
@@ -78,7 +75,7 @@ export class ChainsRegistry {
       }
     }
 
-    const normalizedAddresses = ['aqua', 'executor', 'maker']
+    const normalizedAddresses = ['aqua', 'executor']
       .map((key) => ({ key, value: config[key] }))
       .reduce<Record<string, string>>((acc, { key, value }) => {
         if (!isAddress(value)) {
@@ -99,17 +96,27 @@ export class ChainsRegistry {
     if (typeof signingKey !== 'string' || !signingKey.startsWith('0x') || signingKey.length !== 66) {
       throw new Error(`Invalid signing key loaded from ${signingKeyEnv} for chain ${chainId}`);
     }
+    const makerAddress = new Wallet(signingKey).address;
+
+    const pricingUrl = envLookup('PRICING_URL');
+    const strategyUrl = envLookup('STRATEGY_URL');
+    if (!pricingUrl) {
+      throw new Error('PRICING_URL environment variable is not set');
+    }
+    if (!strategyUrl) {
+      throw new Error('STRATEGY_URL environment variable is not set');
+    }
 
     return {
       chainId,
       name: String(config.name),
       rpcUrl: String(config.rpcUrl),
-      pricingUrl: String(config.pricingUrl),
-      strategyUrl: String(config.strategyUrl),
+      pricingUrl,
+      strategyUrl,
       signingKey,
       aqua: normalizedAddresses.aqua,
       executor: normalizedAddresses.executor,
-      maker: normalizedAddresses.maker,
+      maker: getAddress(makerAddress),
     };
   }
 }

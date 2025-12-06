@@ -3,7 +3,6 @@ import { ApiOkResponse, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger'
 import { ChainsRegistry } from './config/chains.registry';
 import { StrategiesService } from './strategies/strategies.service';
 
-@ApiTags('public')
 @Controller()
 export class AppController {
   constructor(
@@ -19,13 +18,6 @@ export class AppController {
       status: 'ok',
       timestamp: new Date().toISOString(),
     };
-  }
-
-  @Get('chains')
-  @ApiOperation({ summary: 'List configured chains (public data only)' })
-  @ApiOkResponse({ description: 'Array of chains' })
-  getChains() {
-    return this.chainsRegistry.list().map(({ signingKey, ...rest }) => rest);
   }
 
   @Get('metadata')
@@ -53,6 +45,21 @@ export class AppController {
           }
         : null,
     };
+  }
+
+  @Get('chains')
+  @ApiOperation({ summary: 'List supported chains (public safe data)' })
+  @ApiOkResponse({
+    description: 'Array of chains with public fields',
+  })
+  getChains() {
+    return this.chainsRegistry.list().map(({ chainId, name, maker, executor, aqua }) => ({
+      chainId,
+      name,
+      maker,
+      executor,
+      aqua,
+    }));
   }
 }
 

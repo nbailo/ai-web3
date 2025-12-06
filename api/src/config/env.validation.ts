@@ -5,6 +5,8 @@ export const envValidationSchema = Joi.object({
   PORT: Joi.number().default(8080),
   DATABASE_URL: Joi.string().uri().required(),
   CHAINS_CONFIG_PATH: Joi.string().default('chains.config.json'),
+  PRICING_URL: Joi.string().uri().required(),
+  STRATEGY_URL: Joi.string().uri().required(),
   REQUEST_TIMEOUT_MS: Joi.number().default(5000),
   GLOBAL_TIMEOUT_MS: Joi.number().default(8000),
   QUOTE_EXPIRY_SECONDS: Joi.number().default(120),
