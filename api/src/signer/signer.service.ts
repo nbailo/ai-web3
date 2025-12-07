@@ -13,7 +13,7 @@ export class SignerService {
     const wallet = this.getWallet(payload.chainId);
 
     const domain: TypedDataDomain = {
-      name: 'AquaQuote',
+      name: 'AquaQuoteExecutor',
       version: '1',
       chainId: payload.chainId,
       verifyingContract: payload.executor,
