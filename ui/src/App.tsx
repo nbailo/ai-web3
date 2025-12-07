@@ -385,7 +385,7 @@ function App() {
           <h2>Request parameters</h2>
 
           <label>
-            <span>Sell token</span>
+            <span>From</span>
             <select
               value={form.sellTokenKey}
               onChange={(event) => updateField('sellTokenKey', event.target.value as TokenKey)}
@@ -399,7 +399,7 @@ function App() {
           </label>
 
           <label>
-            <span>Buy token</span>
+            <span>To</span>
             <select
               value={form.buyTokenKey}
               onChange={(event) => updateField('buyTokenKey', event.target.value as TokenKey)}
@@ -413,7 +413,7 @@ function App() {
           </label>
 
           <label>
-            <span>Sell amount ({sellToken.symbol})</span>
+            <span>Amount ({sellToken.symbol})</span>
             <input
               type="text"
               inputMode="decimal"
@@ -421,9 +421,9 @@ function App() {
               onChange={(event) => updateField('sellAmountHuman', sanitizeDecimalInput(event.target.value))}
               placeholder="0.10"
             />
-            <small>Human readable value · converted to raw units using {sellToken.decimals} decimals.</small>
+            {/* <small>Human readable value · converted to raw units using {sellToken.decimals} decimals.</small> */}
           </label>
-
+{/*
           <label>
             <span>Recipient (optional)</span>
             <input
@@ -432,7 +432,7 @@ function App() {
               onChange={(event) => updateField('recipient', event.target.value)}
               placeholder={account ?? '0x...'}
             />
-          </label>
+          </label> */}
 
           <div className="form-actions">
             <button onClick={requestPrice} disabled={loading === 'price' || !walletChain}>
