@@ -55,17 +55,20 @@ How It Works
 5.	If accepted, API signs the quote (EIP-712) and stores it
 6.	Taker submits the signed quote to AquaQuoteExecutor on-chain
 7.	Contract validates and executes the swap using Aqua strategies
-Key Features
-•	Deterministic quoting: same inputs produce identical quotes
-•	Policy enforcement: maker-defined limits and constraints
-•	On-chain compatibility: strategy hashes match Solidity computation
-•	Price impact optimization: buys as much as possible at better prices
-•	Rejection reasons: clear codes (STALE_PRICING, MAX_IMPACT_BPS_EXCEEDED, etc.)
-•	Multi-chain support: Base, BNB Chain, and others
-Technology Stack
-•	Backend: Python (Flask), TypeScript/Node.js (NestJS)
-•	Blockchain: Solidity (Foundry), Web3.py, ethers.js
-•	Database: PostgreSQL with TypeORM
-•	APIs: REST with Swagger/OpenAPI documentation
-•	Signing: EIP-712 structured data signing
+
+   
+Key Features 
+- Deterministic quoting: same inputs produce identical quotes 
+- Policy enforcement: maker-defined limits and constraints 
+- On-chain compatibility: strategy hashes match Solidity computation 
+- Price impact optimization: buys as much as possible at better prices 
+- Rejection reasons: clear codes (STALE_PRICING, MAX_IMPACT_BPS_EXCEEDED, etc.) 
+- Multi-chain support: Base, BNB Chain, and others 
+  
+Technology Stack 
+- Backend: Python (Flask), TypeScript/Node.js (NestJS) 
+- Blockchain: Solidity (Foundry), Web3.py, ethers.js 
+- Database: PostgreSQL with TypeORM 
+- APIs: REST with Swagger/OpenAPI documentation 
+- Signing: EIP-712 structured data signing 
 This system enables makers to provide liquidity through configurable strategies while ensuring quotes are valid, signed, and executable on-chain.
