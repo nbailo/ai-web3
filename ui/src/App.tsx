@@ -32,7 +32,7 @@ type TokenKey = TokenOption['key']
 type FormState = {
   sellTokenKey: TokenKey
   buyTokenKey: TokenKey
-  sellAmount: string
+  sellAmountHuman: string
   recipient: string
 }
 
@@ -91,6 +91,26 @@ const findTokenByAddress = (address?: string) => {
 const decimalsForAddress = (address?: string) => findTokenByAddress(address)?.decimals ?? 18
 const symbolForAddress = (address?: string) => findTokenByAddress(address)?.symbol ?? 'token'
 
+const sanitizeDecimalInput = (value: string) => {
+  const trimmed = value.replace(/[^0-9.]/g, '')
+  const [head, ...rest] = trimmed.split('.')
+  const tail = rest.join('')
+  return head + (rest.length > 0 ? `.${tail}` : '')
+}
+
+const humanToRawAmount = (value: string, decimals: number) => {
+  const cleaned = value.trim()
+  if (!cleaned) return '0'
+  const [wholeRaw, fractionRaw = ''] = cleaned.split('.')
+  const whole = wholeRaw.replace(/\D/g, '') || '0'
+  const fractionDigits = fractionRaw.replace(/\D/g, '').slice(0, decimals)
+  const wholeBig = BigInt(whole)
+  const fractionBig =
+    fractionDigits.length === 0 ? 0n : BigInt(fractionDigits.padEnd(decimals, '0'))
+  const unit = 10n ** BigInt(decimals)
+  return (wholeBig * unit + fractionBig).toString()
+}
+
 const formatAmount = (raw: string, decimals = 18) => {
   if (!raw) return '0'
   try {
@@ -119,7 +139,7 @@ function App() {
   const [form, setForm] = useState<FormState>({
     sellTokenKey: ROUTE_PRESETS[0].sellTokenKey,
     buyTokenKey: ROUTE_PRESETS[0].buyTokenKey,
-    sellAmount: '100000000000000000',
+    sellAmountHuman: '0.1',
     recipient: '',
   })
   const [account, setAccount] = useState<string>()
@@ -232,7 +252,7 @@ function App() {
         chainId: walletChain!,
         sellToken: sellToken.address,
         buyToken: buyToken.address,
-        sellAmount: form.sellAmount.trim(),
+        sellAmount: humanToRawAmount(form.sellAmountHuman, sellToken.decimals),
       }
       const data = await postJson<PriceResponse>('price', payload)
       setPriceResult(data)
@@ -258,7 +278,7 @@ function App() {
         chainId: walletChain!,
         sellToken: sellToken.address,
         buyToken: buyToken.address,
-        sellAmount: form.sellAmount.trim(),
+        sellAmount: humanToRawAmount(form.sellAmountHuman, sellToken.decimals),
         taker: account,
         recipient: form.recipient.trim() || account,
       }
@@ -393,14 +413,15 @@ function App() {
           </label>
 
           <label>
-            <span>Sell amount (raw units)</span>
+            <span>Sell amount ({sellToken.symbol})</span>
             <input
               type="text"
-              value={form.sellAmount}
-              onChange={(event) => updateField('sellAmount', event.target.value)}
-              placeholder="100000..."
+              inputMode="decimal"
+              value={form.sellAmountHuman}
+              onChange={(event) => updateField('sellAmountHuman', sanitizeDecimalInput(event.target.value))}
+              placeholder="0.10"
             />
-            <small>The display assumes each token uses its on-chain decimals.</small>
+            <small>Human readable value · converted to raw units using {sellToken.decimals} decimals.</small>
           </label>
 
           <label>
