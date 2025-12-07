@@ -9,7 +9,7 @@ ________________________________________________________________________________
 
 Architecture: 
 
-![Architecture](CryptoCatalyst_Architecture.png)
+![Architecture](CryptoCatalyst_Architecture.jpg)
 
 ___________________________________________________________________________________________    
 
