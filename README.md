@@ -109,6 +109,7 @@ Right now, the **web/API mode** uses safe synthetic strategies/trades for UX, wh
   - **MeTTa / Hyperon**: symbolic reasoning and constraint validation for strategies.
   - **MeTTa Knowledge Base (KB):** rule‑based validation (risk, trading allowed, strategy selection).
   - **LLM Integration (ASI:One):** generates and refines strategies and risk analyses.
+  - **Membase intergration** Version with terminal as user inerface has code that allows for data to be stored on the membase
 - **Trading Engine Structures (dataclasses):**
   - [Strategy](cci:2://file:///c:/Users/ishaa/Smart%20Chat%20Bot.py:140:0-158:31)
   - [RiskMetrics](cci:2://file:///c:/Users/ishaa/Smart%20Chat%20Bot.py:129:0-138:24)
@@ -182,6 +183,12 @@ This design keeps the web UI responsive and safe while the more complex MeTTa/Hy
      - Falls back to `metta` CLI if available.
      - Has functions to query rules like `trading_allowed` and `risk_acceptable`.
    - These are meant to provide **symbolic constraints** and **rule‑based validation** over strategies and trades, but in API mode they are currently bypassed for stability.
+  
+4. **membase (infrastructure present)**
+      - The code already:
+     - writes data to membase
+     - checks data in membase for context for LLM
+     - stores long term memory using membase
 
 ### Current API‑Mode Architecture
 
