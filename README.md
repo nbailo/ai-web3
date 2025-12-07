@@ -67,6 +67,7 @@ How It Works
 
    
 Key Features 
+- Self-custodial delegated liquidity: the assets work for you in various strategy while remaining yours
 - Deterministic quoting: same inputs produce identical quotes 
 - Policy enforcement: maker-defined limits and constraints 
 - On-chain compatibility: strategy hashes match Solidity computation 
