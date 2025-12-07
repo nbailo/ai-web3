@@ -12,3 +12,5 @@ contracts/broadcast/
 *.env
 
 */.npm
+
+*.venv/
