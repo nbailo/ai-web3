@@ -1,5 +1,5 @@
 ## Maker Agent (Chat Control Plane)
-
+Double click start_trading_bot.bat to run user friendly version of the chatbot, however this version is unstable and week compared to the terminal version of Smart Chat Bot.py that uses more advanced features that are actually intergrated into the code and is more robust but for some reason the ui breaks more often for the newer version.
 Conversational assistant that helps makers configure Aqua quoting safely. The agent translates natural-language intents into explicit `MakerConfig` updates and unsigned transaction payloads, enforcing a confirm-before-action workflow.
 
 ### Responsibilities
