@@ -12,6 +12,23 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
   const configService = app.get(ConfigService);
 
+  const corsOrigin = configService.get<string>('CORS_ORIGIN', '*');
+  const parsedOrigins =
+    corsOrigin === '*'
+      ? []
+      : corsOrigin
+          .split(',')
+          .map((value) => value.trim())
+          .filter(Boolean);
+  const corsOriginValue = corsOrigin === '*' || parsedOrigins.length === 0 ? true : parsedOrigins;
+
+  app.enableCors({
+    origin: corsOriginValue,
+    credentials: true,
+    methods: ['GET', 'HEAD', 'OPTIONS', 'POST', 'PUT', 'PATCH', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-request-id'],
+  });
+
   app.setGlobalPrefix('v1');
   app.useGlobalPipes(
     new ValidationPipe({
