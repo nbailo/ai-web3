@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { randomUUID } from 'crypto';
+import { Interface, InterfaceAbi } from 'ethers';
 import { PricingClient } from '../pricing/pricing.client';
 import { StrategyClient } from '../strategy/strategy.client';
 import { ChainsRegistry } from '../config/chains.registry';
@@ -15,6 +16,25 @@ import { PriceRequestDto, PriceResponseDto, QuoteRequestDto, QuoteResponseDto } 
 import { PricingSnapshotDto } from '../pricing/pricing.types';
 import { StrategyIntentResponse } from '../strategy/strategy.types';
 import { StrategyEntity } from '../db/entities/strategy.entity';
+
+const AQUA_EXECUTOR_ABI: InterfaceAbi = [
+  'function fill((address maker,address tokenIn,address tokenOut,uint256 amountIn,uint256 amountOut,bytes32 strategyHash,uint256 nonce,uint256 expiry) q, bytes sig, uint256 minAmountOutNet)',
+];
+const AQUA_EXECUTOR_INTERFACE = new Interface(AQUA_EXECUTOR_ABI);
+const ZERO_VALUE = '0';
+
+interface BuildExecutorTxParams {
+  executor: string;
+  maker: string;
+  sellToken: string;
+  buyToken: string;
+  sellAmount: string;
+  buyAmount: string;
+  strategyHash: string;
+  nonce: string;
+  expiry: number;
+  signature: string;
+}
 
 @Injectable()
 export class QuotesService {
@@ -93,6 +113,19 @@ export class QuotesService {
       strategyHash: strategyIntent.strategy.hash,
     });
 
+    const executorTx = this.buildExecutorTx({
+      executor: chain.executor,
+      maker: chain.maker,
+      sellToken: dto.sellToken,
+      buyToken: dto.buyToken,
+      sellAmount: dto.sellAmount,
+      buyAmount: strategyIntent.buyAmount,
+      strategyHash: strategyIntent.strategy.hash,
+      nonce,
+      expiry: strategyIntent.expiry,
+      signature: signatureResult.signature,
+    });
+
     const quote = this.quotesRepository.create({
       quoteId,
       chainId: dto.chainId,
@@ -113,9 +146,9 @@ export class QuotesService {
       expiry: strategyIntent.expiry,
       typedData: signatureResult.typedData,
       signature: signatureResult.signature,
-      txTo: strategyIntent.tx.to,
-      txData: strategyIntent.tx.data,
-      txValue: strategyIntent.tx.value,
+      txTo: executorTx.to,
+      txData: executorTx.data,
+      txValue: executorTx.value,
       status: 'ISSUED',
       pricingAsOfMs: strategyIntent.pricing.asOfMs.toString(),
       pricingConfidence: strategyIntent.pricing.confidenceScore,
@@ -195,6 +228,30 @@ export class QuotesService {
             stale: quote.pricingStale ?? false,
             sourcesUsed: quote.pricingSources ?? [],
           },
+    };
+  }
+
+  private buildExecutorTx(params: BuildExecutorTxParams) {
+    const quoteStruct = {
+      maker: params.maker,
+      tokenIn: params.sellToken,
+      tokenOut: params.buyToken,
+      amountIn: params.sellAmount,
+      amountOut: params.buyAmount,
+      strategyHash: params.strategyHash,
+      nonce: params.nonce,
+      expiry: params.expiry,
+    };
+    const minAmountOutNet = params.buyAmount;
+    const data = AQUA_EXECUTOR_INTERFACE.encodeFunctionData('fill', [
+      quoteStruct,
+      params.signature,
+      minAmountOutNet,
+    ]);
+    return {
+      to: params.executor,
+      data,
+      value: ZERO_VALUE,
     };
   }
 }

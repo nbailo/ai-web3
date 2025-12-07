@@ -28,11 +28,6 @@ export interface StrategyIntentResponse {
   feeBps: number;
   feeAmount: string;
   expiry: number;
-  tx: {
-    to: string;
-    data: string;
-    value: string;
-  };
   pricing: {
     asOfMs: number;
     confidenceScore: number;
