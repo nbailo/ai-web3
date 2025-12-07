@@ -342,7 +342,7 @@ function App() {
       <header className="rfq-hero">
         <div>
           <p className="eyebrow">RFQ desk · MVP</p>
-          <h1>Instant RFQ swap over your own API</h1>
+          <h1>Instant RFQ swap</h1>
           <p className="subtitle">
             Connect MetaMask, pull an indicative price, upgrade to a firm quote, and ship the transaction in one go.
           </p>
