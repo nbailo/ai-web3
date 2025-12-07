@@ -13,6 +13,7 @@ export interface StrategyIntentRequest {
   strategy: {
     id: string;
     version: number;
+    hash: string;
     params: Record<string, unknown>;
   };
 }
@@ -39,4 +40,3 @@ export interface StrategyIntentResponse {
     sourcesUsed: string[];
   };
 }
-

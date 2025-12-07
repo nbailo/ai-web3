@@ -13,7 +13,9 @@ export class StrategiesService {
     private readonly appConfigRepository: Repository<AppConfigEntity>,
   ) {}
 
-  createStrategy(data: Pick<StrategyEntity, 'chainId' | 'name' | 'version' | 'params'>): Promise<StrategyEntity> {
+  createStrategy(
+    data: Pick<StrategyEntity, 'chainId' | 'name' | 'version' | 'params' | 'hash'>,
+  ): Promise<StrategyEntity> {
     const entity = this.strategyRepository.create({ ...data, enabled: true });
     return this.strategyRepository.save(entity);
   }

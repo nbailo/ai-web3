@@ -152,7 +152,7 @@ export class QuotesService {
       sellAmount: dto.sellAmount,
       recipient,
       pricingSnapshot,
-      strategy: { id: strategy.id, params: strategy.params, version: strategy.version },
+      strategy: { id: strategy.id, hash: strategy.hash, version: strategy.version, params: strategy.params },
     });
   }
 
