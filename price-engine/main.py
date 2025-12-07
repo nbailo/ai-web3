@@ -608,16 +608,17 @@ def build_depth_curve(req: PriceRequest) -> dict:
             venue_prefix = f"uniswap_v3_{CHAIN_CONFIG[req.chain_id]['name']}"
             provenance_venue = venue_prefix
 
+            provenance_entry = {'venue': provenance_venue}
+            if fee_used is not None:
+                provenance_entry['feeTier'] = fee_used
+
             depth_point = {
                 'amountInRaw': str(amount_in_raw),
                 'amountOutRaw': str(amount_out_raw),
                 'price': decimal_to_str(price),
                 'impactBps': impact_bps_value if impact_bps_value is not None else 0.0,
-                'provenance': {'venue': provenance_venue}
+                'provenance': [provenance_entry],
             }
-
-            if fee_used is not None:
-                depth_point['provenance']['feeTier'] = fee_used
 
             depth_points.append(depth_point)
 

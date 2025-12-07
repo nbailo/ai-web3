@@ -5,7 +5,7 @@ import time
 from datetime import datetime
 
 # ============================================================================
-# Input Data 
+# Input Data
 # ============================================================================
 
 # import { PricingSnapshotDto } from '../pricing/pricing.types';
@@ -15,6 +15,7 @@ class StrategyInfo:
     id: str
     version: int
     params: Dict[str, Any] = field(default_factory=dict)
+    hash: str = ""
 
 @dataclass
 class Provenance:
@@ -87,7 +88,7 @@ class StrategyIntentResponse:
     feeAmount: int  # uint256 in base units
     expiry: int
     pricing: PricingInfo
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON response"""
         return {

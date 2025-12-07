@@ -1,6 +1,7 @@
 from typing import Tuple, List
 import time
 import json
+from decimal import Decimal, InvalidOperation
 from web3 import Web3
 from datatypes import (
     DepthPointDto,
@@ -19,10 +20,10 @@ def compute_strategy_hash(strategy: StrategyInfo) -> str:
     """
     Compute strategy hash exactly as it would be computed on-chain.
     Uses keccak256 of strategy bytes, matching AquaQuoteExecutor.computeStrategyHash.
-    
+
     Args:
         strategy: StrategyInfo with id, version, and params
-        
+
     Returns:
         Hex string of the strategy hash (0x-prefixed, 66 chars)
     """
@@ -38,56 +39,61 @@ def compute_strategy_hash(strategy: StrategyInfo) -> str:
         separators=(',', ':'),
         ensure_ascii=False
     ).encode('utf-8')
-    
+
     # Compute keccak256 hash (same as Solidity keccak256)
     hash_bytes = Web3.keccak(strategy_bytes)
     return Web3.to_hex(hash_bytes)
 
-def calculate_impact_and_fee_bps(
+def calculate_impact_and_buy_amount(
     sell_amount: int,
     depth_points: List[DepthPointDto],
     mid_price: str
-) -> Tuple[float, float]:
+) -> Tuple[float, int]:
     """
-    Calculate impact_bps and fee_bps by buying as much as possible at cheap prices.
-    
-    Strategy: Walk through depth curve from best to worst prices, filling
-    as much as possible at each price level before moving to the next.
-    Depth points are cumulative - each point represents total available up to that amount.
-    
-    Args:
-        sell_amount: Amount to sell (in base units)
-        depth_points: List of depth points (ordered by amount, best prices first)
-        mid_price: Mid price as string
-        
-    Returns:
-        Tuple of (impact_bps, buy_amount) where:
-        - impact_bps: Price impact in basis points (how much worse than mid price)
+    Linear interpolation over cumulative depth curve to estimate executable buy amount
+    and resulting price impact vs mid price.
     """
-    below_ideal_point = DepthPointDto(
-    amountInRaw=0,
-    amountOutRaw=0,
-    price=mid_price,
-    impactBps=0,
-    provenance=[]
+    if sell_amount <= 0 or not depth_points:
+        return 0.0, 0
+
+    # Ensure depth points are sorted by cumulative input
+    sorted_points = sorted(depth_points, key=lambda dp: dp.amountInRaw)
+
+    prev_point = DepthPointDto(
+        amountInRaw=0,
+        amountOutRaw=0,
+        price=mid_price,
+        impactBps=0,
+        provenance=[],
     )
-    ideal_point = DepthPointDto(
-    amountInRaw=0,
-    amountOutRaw=0,
-    price=mid_price,
-    impactBps=0,
-    provenance=[]
-    )
-    #point at start of curve with 0 trade volume
-    for point in depth_points:
-        below_ideal_point = ideal_point
-        ideal_point = point
-        if below_ideal_point.amountInRaw >= sell_amount:
+
+    for point in sorted_points:
+        if sell_amount <= point.amountInRaw:
+            denominator = point.amountInRaw - prev_point.amountInRaw
+            if denominator == 0:
+                buy_amount = point.amountOutRaw
+            else:
+                ratio = (sell_amount - prev_point.amountInRaw) / denominator
+                buy_amount = int(
+                    prev_point.amountOutRaw
+                    + (point.amountOutRaw - prev_point.amountOutRaw) * ratio
+                )
             break
-    
-    impact_bps = below_ideal_point.impactBps + (ideal_point.impactBps - below_ideal_point.impactBps) * (sell_amount - below_ideal_point.amountInRaw) / (ideal_point.amountInRaw - below_ideal_point.amountInRaw)      
-    buy_amount = below_ideal_point.amountOutRaw + (ideal_point.impactBps - below_ideal_point.impactBps) * (sell_amount - below_ideal_point.amountInRaw) / (ideal_point.amountInRaw - below_ideal_point.amountInRaw)     
-    
+        prev_point = point
+    else:
+        # Requested size exceeds curve, use the last cumulative point
+        buy_amount = sorted_points[-1].amountOutRaw
+
+    try:
+        mid = Decimal(mid_price)
+        exec_price = Decimal(buy_amount) / Decimal(sell_amount)
+        if mid == 0:
+            impact_bps = 0
+        else:
+            impact_bps = float(((exec_price - mid) / mid) * Decimal('10000'))
+    except (InvalidOperation, ZeroDivisionError):
+        impact_bps = 0.0
+
     return impact_bps, buy_amount
 
 # @dataclass
@@ -112,8 +118,8 @@ def check_policy_enforcement(
     Returns rejection reason if policy violated, None otherwise.
     """
     rejections = []
-    
-    
+
+
 #     @dataclass
 # class PricingSnapshotDto:
 #   asOfMs: int
@@ -139,10 +145,10 @@ def check_policy_enforcement(
     #   price: str
     #   impactBps: int
     #   provenance: List[Provenance]
-    # finding ideal point on the depth curve          
-    
-    
-    impact_bps, buy_amount = calculate_impact_and_fee_bps(
+    # finding ideal point on the depth curve
+
+
+    impact_bps, buy_amount = calculate_impact_and_buy_amount(
         sell_amount=sir.sellAmount,
         depth_points=sir.pricingSnapshot.depthPoints,
         mid_price=sir.pricingSnapshot.midPrice
@@ -152,7 +158,7 @@ def check_policy_enforcement(
         rejections.append(RejectionReason.MAX_IMPACT_BPS_EXCEEDED)
     # Check max trade size
     amount_float = int(sir.sellAmount)
-    max_trade_float = int(sir.strategy.params["maxTradeRaw"]) 
+    max_trade_float = int(sir.strategy.params["maxTradeRaw"])
     if max_trade_float > 0 and amount_float > max_trade_float:
         rejections.append(RejectionReason.MAX_TRADE_SIZE_EXCEEDED)
     #enforcement of the transactions (ttlsec, spreadBps, maxImpactBps, feeBps)
@@ -166,8 +172,8 @@ def process_quote_request(
     Returns: (intent, rejection_reason(s))
     """
     # Compute strategy hash (matches on-chain computation)
-    strategy_hash = compute_strategy_hash(sir.strategy)
-    
+    strategy_hash = sir.strategy.hash if hasattr(sir.strategy, "hash") and sir.strategy.hash else compute_strategy_hash(sir.strategy)
+
     # Build strategy info response with hash
     strategy_info_response = StrategyInfoResponse(
         id=sir.strategy.id,
@@ -185,13 +191,15 @@ def process_quote_request(
     sir.pricingSnapshot.reasonCodes = reasoncodes
     print(sir.pricingSnapshot.reasonCodes)
 
+    ttl_ms = int(sir.strategy.params["ttlSec"]) * 1000
+
     strategy_intent_response = StrategyIntentResponse(
         decision=decision,
         strategy=strategy_info_response,
         buyAmount=buy_amount*(1-sir.strategy.params["spreadBps"]/10000),
         feeBps=sir.strategy.params["feeBps"],
         feeAmount=int(sir.strategy.params["feeBps"] * sir.sellAmount/ 10000),
-        expiry=sir.pricingSnapshot.asOfMs + sir.strategy.params["ttlSec"],
+        expiry=sir.pricingSnapshot.asOfMs + ttl_ms,
         pricing=sir.pricingSnapshot
     )
     return strategy_intent_response

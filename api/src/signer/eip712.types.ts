@@ -1,19 +1,13 @@
 import { TypedDataDomain } from 'ethers';
 export interface QuoteTypedMessage {
-  quoteId: string;
   maker: string;
-  taker: string;
-  recipient: string;
-  sellToken: string;
-  buyToken: string;
-  sellAmount: string;
-  buyAmount: string;
-  feeAmount: string;
-  feeBps: number;
-  expiry: number;
-  nonce: string;
-  strategyId: string;
+  tokenIn: string;
+  tokenOut: string;
+  amountIn: string;
+  amountOut: string;
   strategyHash: string;
+  nonce: string;
+  expiry: number;
 }
 
 export interface QuoteSigningPayload extends QuoteTypedMessage {

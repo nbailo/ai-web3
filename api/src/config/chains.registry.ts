@@ -11,6 +11,7 @@ export interface ChainConfig {
   signingKey: string;
   pricingUrl: string;
   strategyUrl: string;
+  executorFeeBps: number;
 }
 
 const REQUIRED_FIELDS: Array<string> = [
@@ -107,6 +108,12 @@ export class ChainsRegistry {
       throw new Error('STRATEGY_URL environment variable is not set');
     }
 
+    const executorFeeBps =
+      config.executorFeeBps === undefined ? 0 : Number(config.executorFeeBps);
+    if (!Number.isFinite(executorFeeBps) || executorFeeBps < 0 || executorFeeBps >= 10000) {
+      throw new Error(`Invalid executorFeeBps for chain ${chainId}`);
+    }
+
     return {
       chainId,
       name: String(config.name),
@@ -117,6 +124,7 @@ export class ChainsRegistry {
       aqua: normalizedAddresses.aqua,
       executor: normalizedAddresses.executor,
       maker: getAddress(makerAddress),
+      executorFeeBps,
     };
   }
 }

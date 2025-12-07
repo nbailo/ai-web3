@@ -21,38 +21,26 @@ export class SignerService {
 
     const types = {
       Quote: [
-        { name: 'quoteId', type: 'string' },
         { name: 'maker', type: 'address' },
-        { name: 'taker', type: 'address' },
-        { name: 'recipient', type: 'address' },
-        { name: 'sellToken', type: 'address' },
-        { name: 'buyToken', type: 'address' },
-        { name: 'sellAmount', type: 'uint256' },
-        { name: 'buyAmount', type: 'uint256' },
-        { name: 'feeAmount', type: 'uint256' },
-        { name: 'feeBps', type: 'uint16' },
-        { name: 'expiry', type: 'uint256' },
-        { name: 'nonce', type: 'uint256' },
-        { name: 'strategyId', type: 'bytes32' },
+        { name: 'tokenIn', type: 'address' },
+        { name: 'tokenOut', type: 'address' },
+        { name: 'amountIn', type: 'uint256' },
+        { name: 'amountOut', type: 'uint256' },
         { name: 'strategyHash', type: 'bytes32' },
+        { name: 'nonce', type: 'uint256' },
+        { name: 'expiry', type: 'uint256' },
       ],
     };
 
     const message: QuoteTypedMessage = {
-      quoteId: payload.quoteId,
       maker: payload.maker,
-      taker: payload.taker,
-      recipient: payload.recipient,
-      sellToken: payload.sellToken,
-      buyToken: payload.buyToken,
-      sellAmount: payload.sellAmount,
-      buyAmount: payload.buyAmount,
-      feeAmount: payload.feeAmount,
-      feeBps: payload.feeBps,
-      expiry: payload.expiry,
-      nonce: payload.nonce,
-      strategyId: payload.strategyId,
+      tokenIn: payload.tokenIn,
+      tokenOut: payload.tokenOut,
+      amountIn: payload.amountIn,
+      amountOut: payload.amountOut,
       strategyHash: payload.strategyHash,
+      nonce: payload.nonce,
+      expiry: payload.expiry,
     };
 
     const signature = await wallet.signTypedData(domain, types, message);

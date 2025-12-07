@@ -3,10 +3,10 @@ export interface DepthPointDto {
   amountOutRaw: string;
   price: string;
   impactBps: number;
-  provenance: {
+  provenance: Array<{
     venue: string;
     feeTier?: number;
-  };
+  }>;
 }
 
 export interface PricingSnapshotDto {

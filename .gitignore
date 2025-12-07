@@ -14,3 +14,5 @@ contracts/broadcast/
 */.npm
 
 *.venv/
+
+**__pycache__/

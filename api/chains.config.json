@@ -4,14 +4,16 @@
     "rpcUrl": "https://rpc.ankr.com/base/2b1525b3c0c0b7f5780bfb4493e7ba6e610bb89ce35764ccb14123dbfc73e3a8",
     "aqua": "0x499943E74FB0cE105688beeE8Ef2ABec5D936d31",
     "executor": "0x9F8F059A900A9Ce823C7C8eD19d66b32cC6505E7",
-    "signingKeyEnv": "SIGNING_KEY_8453"
+    "signingKeyEnv": "SIGNING_KEY_8453",
+    "executorFeeBps": 50
   },
   "56": {
     "name": "bsc",
     "rpcUrl": "https://rpc.ankr.com/bsc/2b1525b3c0c0b7f5780bfb4493e7ba6e610bb89ce35764ccb14123dbfc73e3a8",
     "aqua": "0x499943E74FB0cE105688beeE8Ef2ABec5D936d31",
     "executor": "0x0B9Ec798B4Ea766d8c5C2b995aD37FedB858200a",
-    "signingKeyEnv": "SIGNING_KEY_56"
+    "signingKeyEnv": "SIGNING_KEY_56",
+    "executorFeeBps": 50
   }
 }
 

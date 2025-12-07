@@ -47,13 +47,13 @@ swagger = Swagger(app, config=swagger_config, template=swagger_template)
 def ingest_strategy_intent_request(data: Dict[str, Any]) -> StrategyIntentRequest:
     """
     Ingest and validate a StrategyIntentRequest from JSON data.
-    
+
     Args:
         data: Dictionary containing the request data from JSON body
-        
+
     Returns:
         StrategyIntentRequest: Validated and constructed request object
-        
+
     Raises:
         KeyError: If required fields are missing
         ValueError: If field types are invalid
@@ -63,13 +63,13 @@ def ingest_strategy_intent_request(data: Dict[str, Any]) -> StrategyIntentReques
         # Validate top-level required fields
         if not data:
             raise ValueError("Request body is empty")
-        
+
         # Extract and validate pricingSnapshot (nested PricingSnapshotDto)
         if 'pricingSnapshot' not in data:
             raise KeyError("Missing required field: pricingSnapshot")
-        
+
         pricing_data = data['pricingSnapshot']
-        
+
         # Build DepthPointDto list
         depth_points = []
         if 'depthPoints' in pricing_data:
@@ -83,7 +83,7 @@ def ingest_strategy_intent_request(data: Dict[str, Any]) -> StrategyIntentReques
                             feeTier=prov_data.get('feeTier')
                         )
                         provenance_list.append(provenance)
-                
+
                 depth_point = DepthPointDto(
                     amountInRaw=int(dp_data['amountInRaw']),
                     amountOutRaw=int(dp_data['amountOutRaw']),
@@ -92,7 +92,7 @@ def ingest_strategy_intent_request(data: Dict[str, Any]) -> StrategyIntentReques
                     provenance=provenance_list
                 )
                 depth_points.append(depth_point)
-        
+
         # Build PricingSnapshotDto
         pricing_snapshot = PricingSnapshotDto(
             asOfMs=pricing_data['asOfMs'],
@@ -103,18 +103,19 @@ def ingest_strategy_intent_request(data: Dict[str, Any]) -> StrategyIntentReques
             stale=pricing_data['stale'],
             reasonCodes=pricing_data['reasonCodes']
         )
-        
+
         # Extract and validate strategy (nested StrategyInfo)
         if 'strategy' not in data:
             raise KeyError("Missing required field: strategy")
-        
+
         strategy_data = data['strategy']
         strategy = StrategyInfo(
             id=strategy_data['id'],
             version=int(strategy_data['version']),
-            params=strategy_data.get('params', {})
+            params=strategy_data.get('params', {}),
+            hash=str(strategy_data.get('hash', '') or '')
         )
-        
+
         # Build StrategyIntentRequest
         intent_request = StrategyIntentRequest(
             chainId=int(data['chainId']),
@@ -128,9 +129,9 @@ def ingest_strategy_intent_request(data: Dict[str, Any]) -> StrategyIntentReques
             pricingSnapshot=pricing_snapshot,
             strategy=strategy
         )
-        
+
         return intent_request
-        
+
     except KeyError as e:
         raise KeyError(f"Missing required field: {str(e)}")
     except (ValueError, TypeError) as e:
@@ -362,7 +363,7 @@ def get_response():
         data = request.json
         if not data:
             return jsonify({'error': 'Missing request body'}), 400
-        
+
         # Ingest StrategyIntentRequest
         intent_request = ingest_strategy_intent_request(data)
         intent_response = process_quote_request(intent_request)
