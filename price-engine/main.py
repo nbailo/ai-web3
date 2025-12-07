@@ -5,13 +5,131 @@ import hashlib
 import json
 from web3 import Web3
 from flask import Flask, jsonify, request
+from flasgger import Swagger
 from decimal import Decimal, ROUND_DOWN
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
 from dataclasses import dataclass
 from typing import Optional
+import dotenv
+
+dotenv.load_dotenv()
 
 app = Flask(__name__)
+app.config['SWAGGER'] = {
+    'title': 'Price Engine API',
+    'uiversion': 3
+}
+
+swagger_template = {
+    'info': {
+        'title': 'Price Engine API',
+        'description': 'Consistent mid prices, liquidity curves, and quality signals for quoting.',
+        'version': '1.0.0'
+    },
+    'basePath': '/',
+    'schemes': ['http', 'https'],
+    'tags': [
+        {'name': 'Pricing', 'description': 'Depth sampling and price synthesis'},
+        {'name': 'Health', 'description': 'Operational status of upstream RPCs'}
+    ],
+    'definitions': {
+        'PriceRequest': {
+            'type': 'object',
+            'required': ['chainId', 'tokenIn', 'tokenOut'],
+            'properties': {
+                'chainId': {'type': 'integer', 'example': 8453},
+                'tokenIn': {'type': 'string', 'example': '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'},
+                'tokenOut': {'type': 'string', 'example': '0x4200000000000000000000000000000000000006'},
+                'amountGrid': {
+                    'type': 'array',
+                    'items': {'type': 'string'},
+                    'description': 'Amounts in base units (ints). If omitted, defaults to preset human-size grid.',
+                    'example': ['100000000', '500000000']
+                },
+                'maxLatencyMs': {'type': 'integer', 'example': 10000},
+                'preferredSources': {
+                    'type': 'array',
+                    'items': {'type': 'string'},
+                    'example': ['uniswap', '1inch']
+                }
+            }
+        },
+        'PricingDepthRequest': {
+            'type': 'object',
+            'required': ['chainId', 'sellToken', 'buyToken', 'sellAmount'],
+            'properties': {
+                'chainId': {'type': 'integer', 'example': 8453},
+                'sellToken': {'type': 'string', 'example': '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'},
+                'buyToken': {'type': 'string', 'example': '0x4200000000000000000000000000000000000006'},
+                'sellAmount': {'type': 'string', 'example': '100000000'},
+                'amountGrid': {
+                    'type': 'array',
+                    'items': {'type': 'string'},
+                    'description': 'Optional override grid in base units',
+                    'example': ['100000000', '250000000']
+                },
+                'maxLatencyMs': {'type': 'integer', 'example': 10000},
+                'preferredSources': {
+                    'type': 'array',
+                    'items': {'type': 'string'}
+                }
+            }
+        },
+        'DepthPoint': {
+            'type': 'object',
+            'properties': {
+                'amountInRaw': {'type': 'string', 'example': '100000000'},
+                'amountOutRaw': {'type': 'string', 'example': '53210000000000000'},
+                'price': {'type': 'string', 'example': '0.00053'},
+                'impactBps': {'type': 'number', 'example': 12.34},
+                'provenance': {
+                    'type': 'object',
+                    'properties': {
+                        'venue': {'type': 'string', 'example': 'uniswap_v3_base'},
+                        'feeTier': {'type': 'integer', 'example': 500}
+                    }
+                }
+            }
+        },
+        'PriceResponse': {
+            'type': 'object',
+            'properties': {
+                'asOfMs': {'type': 'integer'},
+                'chainId': {'type': 'integer'},
+                'tokenIn': {'type': 'string'},
+                'tokenOut': {'type': 'string'},
+                'decimalsIn': {'type': 'integer'},
+                'decimalsOut': {'type': 'integer'},
+                'midPrice': {'type': 'string'},
+                'depthPoints': {
+                    'type': 'array',
+                    'items': {'$ref': '#/definitions/DepthPoint'}
+                },
+                'sourcesUsed': {
+                    'type': 'array',
+                    'items': {'type': 'string'}
+                },
+                'latencyMs': {'type': 'integer'},
+                'confidenceScore': {'type': 'number'},
+                'stale': {'type': 'boolean'},
+                'reasonCodes': {
+                    'type': 'array',
+                    'items': {'type': 'string'}
+                }
+            }
+        },
+        'HealthResponse': {
+            'type': 'object',
+            'properties': {
+                'status': {'type': 'string', 'example': 'ok'},
+                'chains': {'type': 'object'},
+                'timestamp': {'type': 'integer'}
+            }
+        }
+    }
+}
+Swagger(app, template=swagger_template)
 
 # =============================================================================
 # CHAIN CONFIGURATION
@@ -166,7 +284,6 @@ def generate_cache_key(
         chain_id: int,
         token_in: str,
         token_out: str,
-        side: str,
         amount_grid: list[int]
 ) -> str:
     """Generate deterministic cache key for request deduplication."""
@@ -174,7 +291,6 @@ def generate_cache_key(
         'chainId': chain_id,
         'tokenIn': token_in.lower(),
         'tokenOut': token_out.lower(),
-        'side': side,
         'amountGrid': sorted(amount_grid)
     }
     key_str = json.dumps(key_data, sort_keys=True)
@@ -206,6 +322,60 @@ def decimal_to_str(d: Decimal | None, precision: int = 18) -> str | None:
         return None
     quantized = d.quantize(Decimal(10) ** -precision, rounding=ROUND_DOWN)
     return format(quantized, 'f')
+
+
+def decimal_to_float(d: Decimal | None, precision: int = 4) -> float | None:
+    """Convert Decimal to float with bounded precision for API responses."""
+    if d is None:
+        return None
+    quantized = d.quantize(Decimal(10) ** -precision, rounding=ROUND_DOWN)
+    return float(quantized)
+
+
+def parse_base_unit_amount(value: int | str, field_name: str) -> int:
+    """Normalize user-provided amount to int (base units)."""
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped.lower().startswith('0x'):
+            raise ValueError(f"{field_name} must be a base-10 integer string, got hex value")
+        try:
+            return int(stripped, 10)
+        except ValueError as exc:
+            raise ValueError(f"{field_name} must be an integer string, got '{value}'") from exc
+    raise ValueError(f"{field_name} must be provided as int or base-10 string")
+
+
+def parse_amount_grid(raw: list[int | str] | str, field_name: str = 'amountGrid') -> list[int]:
+    """Parse comma-separated string or list of base-unit amounts into ints."""
+    if isinstance(raw, str):
+        tokens = [token.strip() for token in raw.split(',') if token.strip()]
+    elif isinstance(raw, list):
+        tokens = raw
+    else:
+        raise ValueError(f"{field_name} must be a list or comma-separated string of integers")
+
+    parsed: list[int] = []
+    for idx, token in enumerate(tokens):
+        parsed.append(parse_base_unit_amount(token, f'{field_name}[{idx}]'))
+
+    if not parsed:
+        raise ValueError(f"{field_name} must include at least one amount")
+    return parsed
+
+
+def normalize_preferred_sources(raw: list[str] | str | None) -> list[str] | None:
+    """Normalize preferredSources payload into a cleaned list."""
+    if raw is None:
+        return None
+    if isinstance(raw, list):
+        cleaned = [str(item).strip() for item in raw if str(item).strip()]
+    elif isinstance(raw, str):
+        cleaned = [token.strip() for token in raw.split(',') if token.strip()]
+    else:
+        raise ValueError('preferredSources must be a comma-separated string or list of strings')
+    return cleaned or None
 
 
 def calculate_price(
@@ -269,60 +439,20 @@ def get_sell_quote_for_fee_tier(
     return None
 
 
-def get_buy_quote_for_fee_tier(
-        chain_id: int,
-        token_in: str,
-        token_out: str,
-        amount_out_raw: int,
-        fee_tier: int,
-        retries: int = 2
-) -> int | None:
-    """Get BUY quote (exact output) for a specific fee tier with retries."""
-    for attempt in range(retries + 1):
-        try:
-            w3 = get_web3(chain_id)
-            quoter_address = get_quoter_address(chain_id)
-            quoter = w3.eth.contract(
-                address=Web3.to_checksum_address(quoter_address),
-                abi=QUOTER_ABI
-            )
-
-            result = quoter.functions.quoteExactOutputSingle({
-                'tokenIn': Web3.to_checksum_address(token_in),
-                'tokenOut': Web3.to_checksum_address(token_out),
-                'amount': amount_out_raw,
-                'fee': fee_tier,
-                'sqrtPriceLimitX96': 0
-            }).call()
-
-            return result[0]  # amountIn
-        except Exception as e:
-            if attempt < retries:
-                time.sleep(0.3 * (attempt + 1))  # Backoff between retries
-                continue
-            # Silently fail - this fee tier may not have a pool or sufficient liquidity
-            return None
-    return None
-
-
 def get_all_quotes_parallel(
         chain_id: int,
         token_in: str,
         token_out: str,
         amounts_raw: list[int],
-        side: str,
         max_latency_ms: int
 ) -> dict[int, tuple[int | None, int | None]]:
     """
     Get best quotes for ALL amounts in parallel.
     Returns {amount_raw: (best_result, fee_used)}
-
-    For SELL: amount_raw is amountIn, result is amountOut
-    For BUY: amount_raw is amountOut (desired), result is amountIn (required)
     """
     results: dict[int, tuple[int | None, int | None]] = {}
 
-    quote_fn = get_sell_quote_for_fee_tier if side == 'sell' else get_buy_quote_for_fee_tier
+    quote_fn = get_sell_quote_for_fee_tier
 
     tasks = [(amount, fee) for amount in amounts_raw for fee in FEE_TIERS]
 
@@ -353,16 +483,9 @@ def get_all_quotes_parallel(
             best_result, best_fee = None, None
             for fee, result in amount_results[amount]:
                 if result is not None:
-                    if side == 'sell':
-                        # For sell, we want MAX output
-                        if best_result is None or result > best_result:
-                            best_result = result
-                            best_fee = fee
-                    else:
-                        # For buy, we want MIN input required
-                        if best_result is None or result < best_result:
-                            best_result = result
-                            best_fee = fee
+                    if best_result is None or result > best_result:
+                        best_result = result
+                        best_fee = fee
             results[amount] = (best_result, best_fee)
 
     return results
@@ -419,65 +542,9 @@ class PriceRequest:
     chain_id: int
     token_in: str
     token_out: str
-    side: str  # 'sell' or 'buy'
     amount_grid: list[int]  # In BASE UNITS (raw)
     max_latency_ms: int = DEFAULT_MAX_LATENCY_MS
     preferred_sources: list[str] | None = None
-
-
-def estimate_buy_from_sell(
-        chain_id: int,
-        token_in: str,
-        token_out: str,
-        desired_amounts_out: list[int],
-        decimals_in: int,
-        decimals_out: int,
-        max_latency_ms: int
-) -> dict[int, tuple[int | None, int | None]] | None:
-    """
-    Fallback: Estimate required input for buy side using sell quotes.
-
-    Strategy:
-    1. Get a small sell quote to establish the spot price
-    2. Use that price to estimate the required input for each desired output
-    3. Add a small buffer for slippage
-
-    Returns quotes in same format as get_all_quotes_parallel or None if failed.
-    """
-    try:
-        # Get spot price using a small sell quote
-        # Use a reference amount that's likely to have liquidity
-        ref_amount_in = 10 ** decimals_in  # 1 unit of input token
-
-        sell_quotes = get_all_quotes_parallel(
-            chain_id, token_in, token_out,
-            [ref_amount_in], 'sell', max_latency_ms
-        )
-
-        ref_out, ref_fee = sell_quotes[ref_amount_in]
-        if ref_out is None or ref_fee is None:
-            return None
-
-        # Calculate spot price: how much output per 1 input
-        spot_price = Decimal(ref_out) / Decimal(ref_amount_in)
-
-        if spot_price <= 0:
-            return None
-
-        # For each desired output amount, estimate required input
-        # Add 0.5% buffer for slippage estimation
-        slippage_factor = Decimal('1.005')
-
-        results: dict[int, tuple[int | None, int | None]] = {}
-        for desired_out in desired_amounts_out:
-            # estimated_in = desired_out / spot_price * slippage_factor
-            estimated_in = int((Decimal(desired_out) / spot_price) * slippage_factor)
-            results[desired_out] = (estimated_in, ref_fee)
-
-        return results
-
-    except Exception:
-        return None
 
 
 def build_depth_curve(req: PriceRequest) -> dict:
@@ -491,13 +558,9 @@ def build_depth_curve(req: PriceRequest) -> dict:
     if req.chain_id not in CHAIN_CONFIG:
         raise ValueError(f"Unsupported chainId: {req.chain_id}. Supported: {list(CHAIN_CONFIG.keys())}")
 
-    # Validate side
-    if req.side not in ('sell', 'buy'):
-        raise ValueError(f"Invalid side: {req.side}. Must be 'sell' or 'buy'")
-
     # Check cache first
     cache_key = generate_cache_key(
-        req.chain_id, req.token_in, req.token_out, req.side, req.amount_grid
+        req.chain_id, req.token_in, req.token_out, req.amount_grid
     )
     cached = get_cached_response(cache_key)
     if cached is not None:
@@ -514,7 +577,7 @@ def build_depth_curve(req: PriceRequest) -> dict:
     # Get all quotes in parallel
     quotes = get_all_quotes_parallel(
         req.chain_id, token_in, token_out,
-        req.amount_grid, req.side, req.max_latency_ms
+        req.amount_grid, req.max_latency_ms
     )
 
     depth_points: list[dict] = []
@@ -523,24 +586,6 @@ def build_depth_curve(req: PriceRequest) -> dict:
     sources_used: list[str] = [f'uniswap_v3_{CHAIN_CONFIG[req.chain_id]["name"]}']
     reason_codes: list[str] = []
     successful_quotes = 0
-    used_fallback = False
-
-    # Check if any direct quotes succeeded
-    any_direct_success = any(quotes[amt][0] is not None for amt in req.amount_grid)
-
-    # If buy side failed completely, try fallback using sell quotes to estimate
-    if req.side == 'buy' and not any_direct_success:
-        # Fallback: Use sell quotes in reverse to estimate required input
-        # This is an approximation but better than failing completely
-        fallback_quotes = estimate_buy_from_sell(
-            req.chain_id, token_in, token_out,
-            req.amount_grid, decimals_in, decimals_out,
-            req.max_latency_ms
-        )
-        if fallback_quotes:
-            quotes = fallback_quotes
-            used_fallback = True
-            reason_codes.append('buy_quotes_estimated_from_sell')
 
     for amount_raw in req.amount_grid:
         result_raw, fee_used = quotes[amount_raw]
@@ -549,12 +594,8 @@ def build_depth_curve(req: PriceRequest) -> dict:
             successful_quotes += 1
             fees_used.add(fee_used)
 
-            if req.side == 'sell':
-                amount_in_raw = amount_raw
-                amount_out_raw = result_raw
-            else:
-                amount_in_raw = result_raw
-                amount_out_raw = amount_raw
+            amount_in_raw = amount_raw
+            amount_out_raw = result_raw
 
             price = calculate_price(amount_in_raw, amount_out_raw, decimals_in, decimals_out)
 
@@ -563,27 +604,25 @@ def build_depth_curve(req: PriceRequest) -> dict:
 
             impact_bps = calculate_impact_bps(price, mid_price)
 
+            impact_bps_value = decimal_to_float(impact_bps, precision=4)
+            venue_prefix = f"uniswap_v3_{CHAIN_CONFIG[req.chain_id]['name']}"
+            provenance_venue = venue_prefix
+
             depth_point = {
-                'amount': str(amount_raw),
-                'impliedPrice': decimal_to_str(price),
-                'impactBps': decimal_to_str(impact_bps, precision=4),
-                'feeUsed': fee_used
+                'amountInRaw': str(amount_in_raw),
+                'amountOutRaw': str(amount_out_raw),
+                'price': decimal_to_str(price),
+                'impactBps': impact_bps_value if impact_bps_value is not None else 0.0,
+                'provenance': {'venue': provenance_venue}
             }
 
-            if req.side == 'sell':
-                depth_point['expectedOut'] = str(result_raw)
-            else:
-                depth_point['requiredIn'] = str(result_raw)
+            if fee_used is not None:
+                depth_point['provenance']['feeTier'] = fee_used
 
             depth_points.append(depth_point)
 
     # Calculate latency
     latency_ms = int((time.time() - start_time) * 1000)
-
-    # Reduce confidence if we used fallback estimation
-    if used_fallback:
-        # Don't count as hard failure, but reduce confidence significantly
-        pass  # Will be handled in confidence scoring below
 
     # ==========================================================================
     # HARD REJECT: If no quotes succeeded, error instead of fabricating data
@@ -597,10 +636,6 @@ def build_depth_curve(req: PriceRequest) -> dict:
 
     # Confidence scoring
     confidence = Decimal('0.95')
-
-    # Reduce confidence if we used fallback estimation
-    if used_fallback:
-        confidence -= Decimal('0.15')
 
     if len(fees_used) > 1:
         confidence -= Decimal('0.05')
@@ -640,18 +675,17 @@ def build_depth_curve(req: PriceRequest) -> dict:
     stale = latency_ms > req.max_latency_ms or confidence < Decimal('0.5')
 
     response = {
-        'asOf': int(time.time() * 1000),
+        'asOfMs': int(time.time() * 1000),
         'chainId': req.chain_id,
         'tokenIn': token_in,
         'tokenOut': token_out,
-        'side': req.side,
         'decimalsIn': decimals_in,
         'decimalsOut': decimals_out,
         'midPrice': decimal_to_str(mid_price) if mid_price else None,
         'depthPoints': depth_points,
         'sourcesUsed': sources_used,
         'latencyMs': latency_ms,
-        'confidenceScore': decimal_to_str(confidence, precision=4),
+        'confidenceScore': decimal_to_float(confidence, precision=4) or 0.0,
         'stale': stale,
         'reasonCodes': reason_codes
     }
@@ -671,25 +705,61 @@ def get_price_data():
     """
     API endpoint for price/depth data.
 
-    GET params or POST JSON:
-        - chainId (int, required)
-        - tokenIn (address, required)
-        - tokenOut (address, required)
-        - side (str, required): 'sell' or 'buy'
-        - amountGrid (list[int], optional): amounts in BASE UNITS
-        - maxLatencyMs (int, optional)
-        - preferredSources (list[str], optional)
+    ---
+    tags:
+      - Pricing
+    consumes:
+      - application/json
+    produces:
+      - application/json
+    parameters:
+      - name: chainId
+        in: query
+        type: integer
+        required: true
+        description: Chain ID (use JSON body for POST)
+      - name: tokenIn
+        in: query
+        type: string
+        required: true
+        description: ERC-20 address provided in base units (checksum or lower-case)
+      - name: tokenOut
+        in: query
+        type: string
+        required: true
+        description: ERC-20 address to quote against
+      - name: amountGrid
+        in: query
+        type: string
+        required: false
+        description: Comma separated list of base-unit amounts
+      - name: preferredSources
+        in: query
+        type: string
+        required: false
+        description: Comma separated list of additional data sources
+      - name: body
+        in: body
+        required: false
+        description: JSON body for POST requests
+        schema:
+          $ref: '#/definitions/PriceRequest'
+    responses:
+      200:
+        description: Pricing snapshot with depth points
+        schema:
+          $ref: '#/definitions/PriceResponse'
+      400:
+        description: Invalid client input
+      500:
+        description: Internal error while building the curve
     """
     if request.method == 'POST':
-        data = request.get_json() or {}
+        data = request.get_json(silent=True) or {}
     else:
         data = request.args.to_dict()
-        if 'amountGrid' in data:
-            data['amountGrid'] = [int(x) for x in data['amountGrid'].split(',')]
-        if 'preferredSources' in data:
-            data['preferredSources'] = data['preferredSources'].split(',')
 
-    required = ['chainId', 'tokenIn', 'tokenOut', 'side']
+    required = ['chainId', 'tokenIn', 'tokenOut']
     missing = [f for f in required if f not in data or not data[f]]
     if missing:
         return jsonify({'error': f'Missing required fields: {missing}'}), 400
@@ -700,25 +770,120 @@ def get_price_data():
         return jsonify({'error': 'chainId must be an integer'}), 400
 
     try:
-        if 'amountGrid' not in data or not data['amountGrid']:
+        preferred_sources = normalize_preferred_sources(data.get('preferredSources'))
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+
+    amount_grid_raw = data.get('amountGrid')
+    amount_grid: list[int]
+
+    try:
+        if amount_grid_raw:
+            amount_grid = parse_amount_grid(amount_grid_raw)
+        elif data.get('sellAmount'):
+            amount_grid = [parse_base_unit_amount(data['sellAmount'], 'sellAmount')]
+        else:
             decimals_in = get_token_decimals(chain_id, data['tokenIn'])
             amount_grid = [int(amt * (10 ** decimals_in)) for amt in DEFAULT_AMOUNT_GRID]
-        else:
-            amount_grid = [int(x) for x in data['amountGrid']]
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
 
+    try:
+        max_latency = int(data.get('maxLatencyMs', DEFAULT_MAX_LATENCY_MS))
+    except (ValueError, TypeError):
+        return jsonify({'error': 'maxLatencyMs must be an integer'}), 400
+
+    try:
         req = PriceRequest(
             chain_id=chain_id,
             token_in=data['tokenIn'],
             token_out=data['tokenOut'],
-            side=data['side'],
             amount_grid=amount_grid,
-            max_latency_ms=int(data.get('maxLatencyMs', DEFAULT_MAX_LATENCY_MS)),
-            preferred_sources=data.get('preferredSources')
+            max_latency_ms=max_latency,
+            preferred_sources=preferred_sources
         )
+    except Exception as e:
+        return jsonify({'error': f'Invalid request: {str(e)}'}), 400
 
+    try:
         result = build_depth_curve(req)
         return jsonify(result)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'error': f'Internal error: {str(e)}'}), 500
 
+
+@app.route('/depth', methods=['POST'])
+def get_depth_snapshot():
+    """
+    Depth snapshot endpoint consumed by the NestJS quoting API.
+
+    ---
+    tags:
+      - Pricing
+    consumes:
+      - application/json
+    produces:
+      - application/json
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          $ref: '#/definitions/PricingDepthRequest'
+    responses:
+      200:
+        description: Pricing snapshot for requested notional
+        schema:
+          $ref: '#/definitions/PriceResponse'
+      400:
+        description: Invalid client input
+      500:
+        description: Internal error while building the curve
+    """
+    data = request.get_json(silent=True) or {}
+    required = ['chainId', 'sellToken', 'buyToken', 'sellAmount']
+    missing = [f for f in required if f not in data or not data[f]]
+    if missing:
+        return jsonify({'error': f'Missing required fields: {missing}'}), 400
+
+    try:
+        chain_id = int(data['chainId'])
+    except (ValueError, TypeError):
+        return jsonify({'error': 'chainId must be an integer'}), 400
+
+    try:
+        preferred_sources = normalize_preferred_sources(data.get('preferredSources'))
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+
+    amount_grid_raw = data.get('amountGrid')
+    try:
+        if amount_grid_raw:
+            amount_grid = parse_amount_grid(amount_grid_raw)
+        else:
+            amount_grid = [parse_base_unit_amount(data['sellAmount'], 'sellAmount')]
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+
+    try:
+        max_latency = int(data.get('maxLatencyMs', DEFAULT_MAX_LATENCY_MS))
+    except (ValueError, TypeError):
+        return jsonify({'error': 'maxLatencyMs must be an integer'}), 400
+
+    req = PriceRequest(
+        chain_id=chain_id,
+        token_in=data['sellToken'],
+        token_out=data['buyToken'],
+        amount_grid=amount_grid,
+        max_latency_ms=max_latency,
+        preferred_sources=preferred_sources
+    )
+
+    try:
+        result = build_depth_curve(req)
+        return jsonify(result)
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
     except Exception as e:
@@ -727,7 +892,20 @@ def get_price_data():
 
 @app.route('/health', methods=['GET'])
 def health():
-    """Health check endpoint."""
+    """
+    Health check endpoint.
+
+    ---
+    tags:
+      - Health
+    produces:
+      - application/json
+    responses:
+      200:
+        description: Chain connectivity snapshot
+        schema:
+          $ref: '#/definitions/HealthResponse'
+    """
     chain_status = {}
     for chain_id, config in CHAIN_CONFIG.items():
         try:
@@ -750,125 +928,12 @@ def health():
 # =============================================================================
 
 if __name__ == '__main__':
-    # Test tokens on Base
-    USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
-    WETH = "0x4200000000000000000000000000000000000006"
+    port = int(os.environ.get('PORT', 8081))
+    debug_mode = os.environ.get('FLASK_DEBUG', '').lower() in ('1', 'true', 'yes')
 
     print("=" * 60)
-    print("Price Engine Test")
+    print(f"Starting Price Engine (Swagger at /apidocs) on port {port}...")
     print("=" * 60)
 
-    try:
-        # Get decimals for test amounts
-        decimals_usdc = get_token_decimals(8453, USDC)
-        decimals_weth = get_token_decimals(8453, WETH)
-
-        # Test SELL side: "I have USDC, how much WETH do I get?"
-        print("\n--- SELL Side Test ---")
-        print("Selling USDC for WETH")
-        req = PriceRequest(
-            chain_id=8453,
-            token_in=USDC,
-            token_out=WETH,
-            side='sell',
-            amount_grid=[
-                100 * (10 ** decimals_usdc),  # 100 USDC
-                500 * (10 ** decimals_usdc),  # 500 USDC
-                1000 * (10 ** decimals_usdc),  # 1000 USDC
-            ]
-        )
-
-        result = build_depth_curve(req)
-
-        print(f"Chain: {result['chainId']}")
-        print(f"Token In:  {result['tokenIn']} (decimals: {result['decimalsIn']})")
-        print(f"Token Out: {result['tokenOut']} (decimals: {result['decimalsOut']})")
-        print(f"Side: {result['side']}")
-        print(f"\nMid Price: {result['midPrice']}")
-        print(f"Confidence: {result['confidenceScore']}")
-        print(f"Stale: {result['stale']}")
-        print(f"Latency: {result['latencyMs']}ms")
-        print(f"Sources: {result['sourcesUsed']}")
-        print(f"Reason Codes: {result['reasonCodes']}")
-
-        print(f"\nDepth Points ({len(result['depthPoints'])}):")
-        for i, pt in enumerate(result['depthPoints']):
-            out_field = pt.get('expectedOut', pt.get('requiredIn'))
-            print(f"  [{i + 1}] amount={pt['amount']} -> {out_field}")
-            print(f"       Price: {pt['impliedPrice']}, Impact: {pt['impactBps']} bps, Fee: {pt['feeUsed']}")
-
-        # Small delay to avoid rate limiting
-        time.sleep(3)
-
-        # Test BUY side: "I want WETH, how much USDC do I need?"
-        # Use smaller amounts for better liquidity availability
-        print("\n--- BUY Side Test ---")
-        print("Buying WETH with USDC (how much USDC needed for X WETH?)")
-
-        try:
-            req_buy = PriceRequest(
-                chain_id=8453,
-                token_in=USDC,
-                token_out=WETH,
-                side='buy',
-                amount_grid=[
-                    int(Decimal('0.01') * (10 ** decimals_weth)),  # Want 0.01 WETH
-                    int(Decimal('0.05') * (10 ** decimals_weth)),  # Want 0.05 WETH
-                    int(Decimal('0.1') * (10 ** decimals_weth)),  # Want 0.1 WETH
-                ],
-                max_latency_ms=15000  # Allow more time for buy quotes
-            )
-
-            result_buy = build_depth_curve(req_buy)
-
-            print(f"Side: {result_buy['side']}")
-            print(f"Mid Price: {result_buy['midPrice']}")
-            print(f"Confidence: {result_buy['confidenceScore']}")
-            print(f"Latency: {result_buy['latencyMs']}ms")
-            print(f"Reason Codes: {result_buy['reasonCodes']}")
-
-            print(f"\nDepth Points ({len(result_buy['depthPoints'])}):")
-            for i, pt in enumerate(result_buy['depthPoints']):
-                print(f"  [{i + 1}] want amount={pt['amount']} -> requiredIn={pt.get('requiredIn')}")
-                print(f"       Price: {pt['impliedPrice']}, Impact: {pt['impactBps']} bps, Fee: {pt['feeUsed']}")
-        except ValueError as e:
-            print(f"⚠️  BUY side test skipped: {e}")
-            print("   (This can happen due to RPC rate limiting or temporary liquidity issues)")
-
-        # Small delay
-        time.sleep(2)
-
-        # Test cache
-        print("\n--- Cache Test ---")
-        cache_test_req = PriceRequest(
-            chain_id=8453,
-            token_in=USDC,
-            token_out=WETH,
-            side='sell',
-            amount_grid=[
-                200 * (10 ** decimals_usdc),
-            ]
-        )
-
-        # First call - populates cache
-        _ = build_depth_curve(cache_test_req)
-
-        # Second call - should hit cache
-        start = time.time()
-        _ = build_depth_curve(cache_test_req)
-        elapsed = (time.time() - start) * 1000
-        print(f"Cached request latency: {elapsed:.2f}ms (should be <5ms)")
-
-        print("\n✅ All tests passed!")
-
-    except Exception as e:
-        print(f"\n❌ Error: {e}")
-        import traceback
-
-        traceback.print_exc()
-
-    print("\n" + "=" * 60)
-    print("Starting Flask server on port 5000...")
-    print("=" * 60)
-
-    app.run(debug=True, port=5000)
+    # Production deployments should run via gunicorn/uwsgi, this path is for local runs.
+    app.run(host='0.0.0.0', debug=debug_mode, port=port)

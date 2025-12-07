@@ -22,6 +22,11 @@ class CreateStrategyDto {
   @ApiProperty({ example: { maxSlippageBps: 30 } })
   @IsObject()
   params!: Record<string, unknown>;
+
+  @ApiProperty({ example: '0x7f5f2d6a3cf2918a57b86f7abf1dfbfd4b543c9a896f1e0c16d5e5d9189d7be2' })
+  @IsString()
+  @IsNotEmpty()
+  hash!: string;
 }
 
 class ActivateStrategyDto {

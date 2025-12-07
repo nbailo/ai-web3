@@ -13,6 +13,7 @@ export interface StrategyIntentRequest {
   strategy: {
     id: string;
     version: number;
+    hash: string;
     params: Record<string, unknown>;
   };
 }
@@ -27,11 +28,6 @@ export interface StrategyIntentResponse {
   feeBps: number;
   feeAmount: string;
   expiry: number;
-  tx: {
-    to: string;
-    data: string;
-    value: string;
-  };
   pricing: {
     asOfMs: number;
     confidenceScore: number;
@@ -39,4 +35,3 @@ export interface StrategyIntentResponse {
     sourcesUsed: string[];
   };
 }
-

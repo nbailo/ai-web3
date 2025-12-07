@@ -25,6 +25,9 @@ export class StrategyEntity {
   @Column({ type: 'jsonb' })
   params!: Record<string, unknown>;
 
+  @Column({ type: 'varchar', length: 66 })
+  hash!: string;
+
   @Column({ type: 'boolean', default: true })
   enabled!: boolean;
 
