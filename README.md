@@ -2,9 +2,18 @@ README
 
 CryptoCatalyst: Aqua-based Agentic Strategist and Trader for Liquidity Providers
 
-demo: https://dashboard.tenderly.co/shared/simulation/72cff1d6-ea31-47bc-9463-a1d9c47e85a0
-
 CryptoCatalyst generates trading strategies through a natural-language conversational interface agent for liquidity providers, as well as executing validated and signed token swaps on Ethereum-compatible chains. By harnessing the AQUA protocol by 1inch (https://github.com/1inch/aqua), CryptoCatalyst enables liquidity providers to earn currency by performing market-making functions and reduce their impermanence losses.  
+
+___________________________________________________________________________________________
+
+Links
+- RFQ trading venue: http://144.126.239.201:5173/
+- API link: http://144.126.239.201:8080/docs#/
+
+Trade Samples
+- Real Trade via UI: https://basescan.org/tx/0x7feb206767ed70e4b09a2e7dd55f6be3828c09e7ce2c799b310fe26667bc4b10
+- Simulated Transaction: https://dashboard.tenderly.co/shared/simulation/72cff1d6-ea31-47bc-9463-a1d9c47e85a0
+
 ___________________________________________________________________________________________
 
 Architecture: 
@@ -58,6 +67,7 @@ How It Works
 
    
 Key Features 
+- Self-custodial delegated liquidity: the assets work for you in various strategy while remaining yours
 - Deterministic quoting: same inputs produce identical quotes 
 - Policy enforcement: maker-defined limits and constraints 
 - On-chain compatibility: strategy hashes match Solidity computation 
