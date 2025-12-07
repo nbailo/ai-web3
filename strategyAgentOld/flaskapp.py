@@ -8,7 +8,7 @@ from decimal import Decimal
 from datatypes import QuoteRequest, AllowedPair, PricingSnapshot, ChainSnapshot
 from confighelper import fetch_maker_config_from_db, fetch_chain_snapshot
 from enforcer import process_quote_request
-from fetch_data import fetch_pricing_snapshot
+from fetchdata import fetch_pricing_snapshot
 from makeragent.SmartChatBot import MakerConfig
 
 app = Flask(__name__)
@@ -20,6 +20,7 @@ def get_quote():
     Expects JSON with: quoteRequest, makerConfig (optional - will fetch if not provided),
     pricingSnapshot (optional - will fetch if not provided), chainSnapshot (optional - will fetch if not provided)
     """
+
     # 1. data intake
     # 1.1 ingest the QuoteRequest 
     # status: waiting for quoteRequest API to implement
