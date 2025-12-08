@@ -85,7 +85,7 @@ Technology Stack
 - APIs: REST with Swagger/OpenAPI documentation 
 - Signing: EIP-712 structured data signing 
 This system enables makers to provide liquidity through configurable strategies while ensuring quotes are valid, signed, and executable on-chain.
- # Autonomous Trading Co‑Pilot (Web UI + API), There Is Another Console Version That Has Full Integreated Capabilities In The Same File
+ # Autonomous Trading Co‑Pilot (Web UI + API), There Is Another Console Version That Has Full Integrated Capabilities In The Same File
 
 An experimental autonomous trading co‑pilot with a ChatGPT‑style web interface.  
 The system is designed to:
